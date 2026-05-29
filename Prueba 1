@@ -1,0 +1,101 @@
+#Codigo de prueba para el primer avance, uso de potenciometro para seleccionar productos,
+# 7 seg. muestra cantidad disponible, y el boton efectua la compra, reduciendo la cantidad y abriendo la "compuerta" (Se mueve el servomotor)
+
+from machine import ADC, Pin, PWM
+import time
+
+# Potenciómetro
+pot = ADC(Pin(28))
+
+# Display 7 segmentos
+PINES_SEG = [0, 1, 2, 3, 4, 5, 6]
+segs = [Pin(p, Pin.OUT) for p in PINES_SEG]
+
+DIGITOS = {
+    0: (1, 1, 1, 1, 1, 1, 0),
+    1: (0, 1, 1, 0, 0, 0, 0),
+    2: (1, 1, 0, 1, 1, 0, 1),
+    3: (1, 1, 1, 1, 0, 0, 1),
+    4: (0, 1, 1, 0, 0, 1, 1),
+    5: (1, 0, 1, 1, 0, 1, 1),
+    6: (1, 0, 1, 1, 1, 1, 1),
+    7: (1, 1, 1, 0, 0, 0, 0),
+    8: (1, 1, 1, 1, 1, 1, 1),
+    9: (1, 1, 1, 1, 0, 1, 1),
+}
+
+def mostrar(n):
+    for seg, val in zip(segs, DIGITOS[n]):
+        seg.value(val)
+        
+# Servo
+servo = PWM(Pin(15))
+servo.freq(50)
+
+def mover_servo(angulo):
+    duty = int((angulo / 180 * 7500) + 2500)
+    servo.duty_u16(duty)
+
+def abrir_compuerta():
+    mover_servo(90)
+
+def cerrar_compuerta():
+    mover_servo(0)
+
+
+#Boton
+boton = Pin(7, Pin.IN, Pin.PULL_UP)
+
+def esperar_soltar_boton():
+    while boton.value() == 0:
+        time.sleep(0.01)
+    time.sleep(0.05)
+
+#Seleccionar producto
+
+def leer_producto():
+    valor = pot.read_u16()
+    if valor < 21845:
+        return 1
+    elif valor < 43690:
+        return 2
+    else:
+        return 3
+    
+#Cantidades
+cantidades = {1: 9, 2: 9, 3: 9}
+
+#Inicio
+cerrar_compuerta()
+producto_actual = leer_producto()
+mostrar(cantidades[producto_actual])
+
+
+#Loop
+while True:
+    producto = leer_producto()
+ 
+    if producto != producto_actual:
+        producto_actual = producto
+        mostrar(cantidades[producto_actual])
+        print(f"Producto: {producto_actual}, Cantidad: {cantidades[producto_actual]}")
+        
+        
+    if boton.value() == 0:
+        if cantidades[producto_actual] > 0:   #Hay stock
+            cantidades[producto_actual] -= 1
+            mostrar(cantidades[producto_actual])
+            print(f"Vendido! Producto: {producto_actual}, Quedan: {cantidades[producto_actual]}")
+            abrir_compuerta()
+            time.sleep(2)
+            cerrar_compuerta()
+        else:
+            #No hay stock
+            print(f"Producto {producto_actual} sin unidades :(")
+    
+            time.sleep(0.4)  #antirrebote
+ 
+    time.sleep(0.1)
+ 
+    
+
