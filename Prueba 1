@@ -1,9 +1,88 @@
-#Codigo de prueba para el primer avance, uso de potenciometro para seleccionar productos,
-# 7 seg. muestra cantidad disponible, y el boton efectua la compra, reduciendo la cantidad y abriendo la "compuerta" (Se mueve el servomotor)
-
 from machine import ADC, Pin, PWM
+import network
+import socket
+import ujson
 import time
 
+
+#WiFi
+SSID = "Gabo's Pixel 10 Pro"
+PASSWORD = "holahola"
+
+def conectar_wifi():
+    red = network.WLAN(network.STA_IF)
+    red.active(True)
+    red.connect(SSID, PASSWORD)
+    print("Conectando al WiFi", end="")
+    intentos = 0
+    while not red.isconnected():
+        print(".", end="")
+        time.sleep(0.5)
+        intentos += 1
+        if intentos > 30:
+            print("\nNo se pudo conectar")
+            return None
+    ip = red.ifconfig()[0]
+    print("\nConectado IP: " + ip)
+    return ip
+
+
+#Servidor
+def crear_servidor():
+    srv = socket.socket()
+    srv.bind(("", 80))
+    srv.listen(5)
+    srv.setblocking(False)
+    return srv
+ 
+def responder(cliente, cuerpo, estado="200 OK"):
+    r = (
+        "HTTP/1.1 " + estado + "\r\n"
+        "Content-Type: application/json\r\n"
+        "Content-Length: " + str(len(cuerpo)) + "\r\n"
+        "\r\n" + cuerpo
+    )
+    cliente.send(r.encode())
+    cliente.close()
+ 
+def manejar_peticion(cliente):
+    global mantenimiento
+    datos = ""
+    try:
+        while "\r\n" not in datos:
+            chunk = cliente.recv(1024).decode()
+            if not chunk:
+                break
+            datos += chunk
+    except:
+        pass
+    if not datos:
+        cliente.close()
+        return
+    partes = datos.split("\r\n")[0].split(" ")
+    if len(partes) < 2:
+        cliente.close()
+        return
+    ruta = partes[1]
+    print("Peticion: " + ruta)
+ 
+    if ruta == "/estado":
+        cuerpo = ujson.dumps({"cantidades": cantidades, "ventas": ventas})
+        responder(cliente, cuerpo)
+ 
+    elif ruta == "/mantenimiento_on":
+        mantenimiento = True
+        modo_mantenimiento(True)
+        responder(cliente, ujson.dumps({"mantenimiento": True}))
+ 
+    elif ruta == "/mantenimiento_off":
+        mantenimiento = False
+        modo_mantenimiento(False)
+        responder(cliente, ujson.dumps({"mantenimiento": False}))
+ 
+    else:
+        responder(cliente, ujson.dumps({"error": "ruta no encontrada"}), "404 Not Found")
+ 
 # Potenciómetro
 pot = ADC(Pin(28))
 
@@ -27,7 +106,7 @@ DIGITOS = {
 def mostrar(n):
     for seg, val in zip(segs, DIGITOS[n]):
         seg.value(val)
-        
+
 # Servo
 servo = PWM(Pin(15))
 servo.freq(50)
@@ -42,7 +121,6 @@ def abrir_compuerta():
 def cerrar_compuerta():
     mover_servo(0)
 
-
 #Boton
 boton = Pin(7, Pin.IN, Pin.PULL_UP)
 
@@ -51,8 +129,23 @@ def esperar_soltar_boton():
         time.sleep(0.01)
     time.sleep(0.05)
 
-#Seleccionar producto
+#LEDs
+leds_verde = {1: Pin(18, Pin.OUT), 2: Pin(20, Pin.OUT), 3: Pin(22, Pin.OUT)}
+leds_rojo  = {1: Pin(19, Pin.OUT), 2: Pin(21, Pin.OUT), 3: Pin(26, Pin.OUT)}
+led_amarillo = Pin(27, Pin.OUT)
 
+def actualizar_leds():
+    #Apaga todos primero
+    for p in [1, 2, 3]:
+        leds_verde[p].value(0)
+        leds_rojo[p].value(0)
+    #Solo prende el del producto seleccionado
+    if cantidades[producto_actual] > 0:
+        leds_verde[producto_actual].value(1)
+    else:
+        leds_rojo[producto_actual].value(1)
+
+#Seleccionar producto
 def leer_producto():
     valor = pot.read_u16()
     if valor < 21845:
@@ -61,41 +154,54 @@ def leer_producto():
         return 2
     else:
         return 3
-    
+
 #Cantidades
 cantidades = {1: 9, 2: 9, 3: 9}
 
+#Ventas
+ventas = {1: 0, 2: 0, 3: 0}
+ 
+#Mantenimiento
+mantenimiento = False
+
+
 #Inicio
 cerrar_compuerta()
+led_amarillo.value(0)
 producto_actual = leer_producto()
 mostrar(cantidades[producto_actual])
+actualizar_leds()
+conectar_wifi()
+servidor = crear_servidor()
 
 
 #Loop
 while True:
     producto = leer_producto()
- 
     if producto != producto_actual:
         producto_actual = producto
         mostrar(cantidades[producto_actual])
+        actualizar_leds()
         print(f"Producto: {producto_actual}, Cantidad: {cantidades[producto_actual]}")
-        
-        
     if boton.value() == 0:
-        if cantidades[producto_actual] > 0:   #Hay stock
+        esperar_soltar_boton()
+        if cantidades[producto_actual] > 0 and not mantenimiento:   #Hay stock
             cantidades[producto_actual] -= 1
+            ventas[producto_actual] += 1
             mostrar(cantidades[producto_actual])
+            actualizar_leds()
             print(f"Vendido! Producto: {producto_actual}, Quedan: {cantidades[producto_actual]}")
             abrir_compuerta()
             time.sleep(2)
             cerrar_compuerta()
         else:
-            #No hay stock
+            #No hay stock o mantenimiento activo
             print(f"Producto {producto_actual} sin unidades :(")
-    
-            time.sleep(0.4)  #antirrebote
- 
+        time.sleep(0.4)  #antirrebote
+    #Atender peticiones HTTP
+    try:
+        cliente, _ = servidor.accept()
+        manejar_peticion(cliente)
+    except:
+        pass
     time.sleep(0.1)
- 
-    
-
