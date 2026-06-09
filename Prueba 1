@@ -79,6 +79,13 @@ def manejar_peticion(cliente):
         mantenimiento = False
         modo_mantenimiento(False)
         responder(cliente, ujson.dumps({"mantenimiento": False}))
+
+    elif ruta == "/restock":
+        for p in [1, 2, 3]:
+            cantidades[p] = 9
+        guardar_cantidades()
+        actualizar_leds()
+        responder(cliente, ujson.dumps({"restock": True}))
  
     else:
         responder(cliente, ujson.dumps({"error": "ruta no encontrada"}), "404 Not Found")
