@@ -1,5 +1,7 @@
+import time
 import dearpygui.dearpygui as dpg
 from api_hacienda import obtener_tipo_cambio
+from fetch_func import iniciar_sincronizacion
 
 precio_colones = 250
 productos = ["p1", "p2", "p3"]
@@ -108,6 +110,7 @@ dpg.show_viewport()
 dpg.set_primary_window("VentanaPrincipal", True)
 
 actualizar_pantalla()
+iniciar_sincronizacion(stock, ventas, actualizar_pantalla)  # ← pass the 3 args
 
 dpg.start_dearpygui()
 dpg.destroy_context()
