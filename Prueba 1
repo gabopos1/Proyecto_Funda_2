@@ -167,7 +167,10 @@ def cargar_cantidades():
     try:
         with open("cantidades.txt", "r") as f:
             datos = ujson.loads(f.read())
-            return datos
+            resultado = {}
+            for k, v in datos.items():
+                resultado[int(k)] = v
+            return resultado
     except:
         return {1: 9, 2: 9, 3: 9} #Si no hay archivo, cargar cantidades completasd
 
