@@ -156,7 +156,19 @@ def leer_producto():
         return 3
 
 #Cantidades
-cantidades = {1: 9, 2: 9, 3: 9}
+def cargar_cantidades():
+    try:
+        with open("cantidades.txt", "r") as f:
+            datos = ujson.loads(f.read())
+            return datos
+    except:
+        return {1: 9, 2: 9, 3: 9} #Si no hay archivo, cargar cantidades completasd
+
+def guardar_cantidades():
+    with open("cantidades.txt", "w") as f:
+        f.write(ujson.dumps(cantidades))
+
+cantidades = cargar_cantidades()
 
 #Ventas
 ventas = {1: 0, 2: 0, 3: 0}
@@ -188,6 +200,7 @@ while True:
         if cantidades[producto_actual] > 0 and not mantenimiento:   #Hay stock
             cantidades[producto_actual] -= 1
             ventas[producto_actual] += 1
+            guardar_cantidades()
             mostrar(cantidades[producto_actual])
             actualizar_leds()
             print(f"Vendido! Producto: {producto_actual}, Quedan: {cantidades[producto_actual]}")
