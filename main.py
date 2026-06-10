@@ -47,6 +47,8 @@ def simular_compra(sender, app_data, user_data):
 def toggle_mantenimiento(sender, app_data):
     global modo_mantenimiento
     modo_mantenimiento = app_data
+    from fetch_func import enviar_mantenimiento
+    enviar_mantenimiento(modo_mantenimiento)
     
     if modo_mantenimiento:
         dpg.set_value("status_text", "ESTADO: MANTENIMIENTO")
@@ -61,9 +63,11 @@ def toggle_mantenimiento(sender, app_data):
 
 def resetear_maquina():
     global stock, ventas
-    stock = [9, 9, 9]
-    ventas = [0, 0, 0]
-    actualizar_pantalla()
+    from fetch_func import enviar_restock
+    if enviar_restock():
+        stock = [9, 9, 9]
+        ventas = [0, 0, 0]
+        actualizar_pantalla()
 
 dpg.create_context()
 
