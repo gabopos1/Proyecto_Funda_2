@@ -9,37 +9,36 @@ PICO_PORT = 80
 INTERVALO = 5
 
 #Request del socket raw
-def _pico_get(ruta: str) -> dict | None:
+def _pico_get(ruta: str) -> dict | None: #Type Hint flecha y :, información pura
     """
-    Sends a minimal HTTP GET to the Pico W.
-    Uses raw sockets instead of urllib to avoid MicroPython's
-    ECONNRESET/WinError10054 caused by chunked/keep-alive headers.
+    Hace uso de protocolo TCP, peticiones HTTP crudas, Serialización y Deserialización de JSONS Chunking
     """
     try:
-        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        sock.settimeout(5)
-        sock.connect((PICO_IP, PICO_PORT))
+        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM) #AF_INET - usará direcciones IPv4, SOCK_STREAM define que será TCP
+        sock.settimeout(5) #Tiempo límite de 5 segundos
+        sock.connect((PICO_IP, PICO_PORT)) #Se conecta usando las variables anteriormente definidas
 
-        request = (
-            f"GET {ruta} HTTP/1.1\r\n"
-            f"Host: {PICO_IP}\r\n"
-            "Connection: close\r\n"
+        request = (                     #Escribe textualmente el protocolo HTTP/1.1, reconstruye lo que haría requests
+            f"GET {ruta} HTTP/1.1\r\n"  #GET - Método HTTP, HTTP/1.1 es versión.
+            f"Host: {PICO_IP}\r\n"      #Especifica la dirección IP (o dominio) del servidor al que se le hace el get
+            "Connection: close\r\n"     
             "\r\n"
-        )
-        sock.sendall(request.encode("utf-8"))
+        )                         
+        sock.sendall(request.encode("utf-8")) #Se hace petición y por medio de .encode("utf-8") se pasa a binario
 
-        respuesta = b""
+        respuesta = b""     #Settea variable binaria vacía
         while True:
-            chunk = sock.recv(1024)
-            if not chunk:
+            chunk = sock.recv(1024)     #Lee respuesta de la Pico W en bloques de máximo 1024 bytes
+            if not chunk:               #Al finalizar conexión con "Connection: close\r\n" chunk es vacío y se cierra el ciclo
                 break
-            respuesta += chunk
+            respuesta += chunk          #Va agregando todos los chunks
 
-        sock.close()
+        sock.close()                    #Cierra el socket
 
-        raw = respuesta.decode("utf-8")
-        body = raw.split("\r\n\r\n", 1)[1].strip() if "\r\n\r\n" in raw else raw.strip()
-        return json.loads(body)
+        raw = respuesta.decode("utf-8")         #Convierte la serie de chunks a binario
+        body = raw.split("\r\n\r\n", 1)[1].strip() if "\r\n\r\n" in raw else raw.strip()  #Asunto de HTTP y limpieza
+        #Método split corta los remanentes de HTTP, generando dos listas, parametro 1 indica que solo debe cortar 1 vez
+        return json.loads(body)     #Carga todo lo anterior en un json para leerlo después
 
     except Exception as e:
         print(f"[Pico] Error en {ruta}: {e}")
@@ -47,26 +46,26 @@ def _pico_get(ruta: str) -> dict | None:
 
 #API
 def obtener_estado_pico() -> dict | None:
-    """GET /estado → {"cantidades": {…}, "ventas": {…}}"""
+    """GET /estado → {"cantidades": {…}, "ventas": {…}}""" #Esta es la petición HTTP resultante de la llamada
     return _pico_get("/estado")
 
-def enviar_mantenimiento(activar: bool) -> bool:
+def enviar_mantenimiento(activar: bool) -> bool:      #Función Switch
     """
-    GET /mantenimiento_on or /mantenimiento_off
-    Returns True if the Pico confirmed the change, False otherwise.
+    GET /mantenimiento_on or /mantenimiento_off 
+    True si la Pico confirmó el cambio, falso en caso contrario 
     """
-    ruta = "/mantenimiento_on" if activar else "/mantenimiento_off"
+    ruta = "/mantenimiento_on" if activar else "/mantenimiento_off"  #Operador ternario, dependiendo del estado de activar (True o False) decide que ruta usar
     resp = _pico_get(ruta)
-    if resp and "mantenimiento" in resp:
-        print(f"[Pico] Mantenimiento: {resp['mantenimiento']}")
+    if resp and "mantenimiento" in resp:            #Si resp no está vacío y contiene mant - True (FUNCIONÓ)
+        print(f"[Pico] Mantenimiento: {resp['mantenimiento']}")     
         return True
-    return False
+    return False                                        #Gestión de errores
 
 def enviar_restock() -> bool:
     """
-    GET /restock → tells the Pico to reset all cantidades to 9
-    and persist them to cantidades.txt.
-    Returns True on success.
+    esetea los contadores de los motores a 9 
+    y abre el archivo de texto interno del chip (cantidades.txt) para sobreescribirlo.
+    Retorna True si es exitoso.
     """
     resp = _pico_get("/restock")
     if resp and resp.get("restock"):
@@ -84,7 +83,7 @@ def sincronizar_con_pico(stock, ventas, actualizar_pantalla):
     cantidades = datos.get("cantidades", {})
     ventas_raw = datos.get("ventas",     {})
 
-    for i in range(3):
+    for i in range(3):          #Pasa de diccionario (indice key, por str), a lista
         key = str(i + 1)
         if key in cantidades:
             stock[i]  = cantidades[key]
@@ -101,10 +100,10 @@ def _loop_sincronizacion(stock, ventas, actualizar_pantalla):
         time.sleep(INTERVALO)
 
 def iniciar_sincronizacion(stock, ventas, actualizar_pantalla):
-    t = threading.Thread(
-        target=_loop_sincronizacion,
-        args=(stock, ventas, actualizar_pantalla),
-        daemon=True
+    t = threading.Thread(               #Inicia evento de tipo hilo para sincronizar sin afectar el resto del sistema
+        target=_loop_sincronizacion,    #Ejecuta el target de fondo siempre
+        args=(stock, ventas, actualizar_pantalla),          #Argumentos de la función
+        daemon=True                 #
     )
-    t.start()
+    t.start()                   #Comienza a ejecutar de forma inmediata
     print(f"[Pico] Sincronización iniciada → http://{PICO_IP}/estado cada {INTERVALO}s")
