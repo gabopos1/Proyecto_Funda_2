@@ -37,7 +37,6 @@ def actualizar_pantalla():
 def simular_compra(sender, app_data, user_data):
     if modo_mantenimiento:
         return
-
     id_producto = user_data
     if stock[id_producto] > 0:
         stock[id_producto] -= 1
@@ -55,18 +54,19 @@ def toggle_mantenimiento(sender, app_data):
         dpg.configure_item("status_text", color=[255, 0, 0])
         for i in range(3):
             dpg.configure_item(f"btn_venta_{i}", enabled=False)
+        dpg.configure_item("btn_rellenar", enabled=True)
     else:
         dpg.set_value("status_text", "ESTADO: OPERATIVO")
         dpg.configure_item("status_text", color=[0, 255, 0])
         for i in range(3):
             dpg.configure_item(f"btn_venta_{i}", enabled=True)
+        dpg.configure_item("btn_rellenar", enabled=False)
 
 def resetear_maquina():
-    global stock, ventas
     from fetch_func import enviar_restock
     if enviar_restock():
-        stock = [9, 9, 9]
-        ventas = [0, 0, 0]
+        for i in range(3):
+            stock[i] = 9
         actualizar_pantalla()
 
 dpg.create_context()
@@ -76,7 +76,7 @@ with dpg.window(tag="VentanaPrincipal"):
         dpg.add_table_column(label="1. INVENTARIO", width_stretch=True)
         dpg.add_table_column(label="2. ESTADÍSTICAS", width_stretch=True)
         dpg.add_table_column(label="3. CONTROL", width_stretch=True)
-
+ 
         with dpg.table_row():
             with dpg.group():
                 for i in range(3):
@@ -97,7 +97,7 @@ with dpg.window(tag="VentanaPrincipal"):
                 dpg.add_text("Tipo de Cambio: Esperando...", tag="stat_tc", color=[200, 200, 200])
                 dpg.add_text("Ganancias en Colones: 0 CRC", tag="stat_colones", color=[0, 255, 0])
                 dpg.add_text("Ganancias en Dólares: 0.00 USD", tag="stat_dolares", color=[0, 255, 0])
-
+ 
             with dpg.group():
                 dpg.add_text("ESTADO: OPERATIVO", tag="status_text", color=[0, 255, 0])
                 dpg.add_spacer(height=10)
@@ -106,15 +106,15 @@ with dpg.window(tag="VentanaPrincipal"):
                 dpg.add_separator()
                 dpg.add_spacer(height=5)
                 dpg.add_text("Administración:")
-                dpg.add_button(label="Rellenar Máquina", callback=resetear_maquina)
-
+                dpg.add_button(label="Rellenar Máquina", tag="btn_rellenar", callback=resetear_maquina, enabled=False)
+ 
 dpg.create_viewport(title='Administrador Vending Machine', width=800, height=400)
 dpg.setup_dearpygui()
 dpg.show_viewport()
 dpg.set_primary_window("VentanaPrincipal", True)
-
+ 
 actualizar_pantalla()
-iniciar_sincronizacion(stock, ventas, actualizar_pantalla)  # ← pass the 3 args
-
+iniciar_sincronizacion(stock, ventas, actualizar_pantalla)
+ 
 dpg.start_dearpygui()
 dpg.destroy_context()
