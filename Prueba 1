@@ -9,8 +9,8 @@ SSID = "Gabo's Pixel 10 Pro"
 PASSWORD = "holahola"
 
 def conectar_wifi():
-    red = network.WLAN(network.STA_IF)
-    red.active(True)
+    red = network.WLAN(network.STA_IF) #inicia en modo estacion
+    red.active(True).  #prende señal de pico
     red.connect(SSID, PASSWORD)
     print("Conectando al WiFi", end="")
     intentos = 0
@@ -26,19 +26,19 @@ def conectar_wifi():
     return ip
 
 # Servidor
-def crear_servidor():
-    srv = socket.socket()
-    srv.bind(("", 80))
-    srv.listen(5)
-    srv.setblocking(False)
-    return srv
+def crear_servidor():  #Crea conexión socket
+    srv = socket.socket() #objeto socket
+    srv.bind(("", 80)) #puerto 80, estándar
+    srv.listen(5) 
+    srv.setblocking(False) #no bloqueante, ejecuta el resto del código
+    return srv 
  
-def responder(cliente, cuerpo, estado="200 OK"):
+def responder(cliente, cuerpo, estado="200 OK"): #def de estado parametro opcional
     r = (
         "HTTP/1.1 " + estado + "\r\n"
-        "Content-Type: application/json\r\n"
+        "Content-Type: application/json\r\n" #definicion json
         "Content-Length: " + str(len(cuerpo)) + "\r\n"
-        "\r\n" + cuerpo
+        "\r\n" + cuerpo #formateo normal de respuesta
     )
     cliente.send(r.encode())
     cliente.close()
@@ -47,21 +47,21 @@ def manejar_peticion(cliente):
     global mantenimiento, cantidades
     try:
         cliente.settimeout(3)
-        datos = cliente.recv(1024).decode()
+        datos = cliente.recv(1024).decode() #chunking, binario a json
     except:
         cliente.close()
         return
     if not datos:
         cliente.close()
         return
-    partes = datos.split("\r\n")[0].split(" ")
+    partes = datos.split("\r\n")[0].split(" ") #limpieza, separa los GETS para obtener json listo
     if len(partes) < 2:
         cliente.close()
         return
     ruta = partes[1]
     print("Peticion: " + ruta)
 
-    if ruta == "/estado":
+    if ruta == "/estado":  #getters HTML
         cuerpo = ujson.dumps({"cantidades": cantidades, "ventas": ventas})
         responder(cliente, cuerpo)
 
